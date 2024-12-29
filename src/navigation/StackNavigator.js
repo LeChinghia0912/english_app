@@ -15,6 +15,7 @@ import { Feedback } from "../containers/Feedback";
 import LessonScreen from "../screens/LessonScreen";
 import QuestionScreen from "../screens/QuestionScreen";
 import CongratulationScreen from "../screens/Congratulation";
+import GeminiChat from "../containers/AI/chatbot";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -106,6 +107,24 @@ const MainTabs = () => (
       }}
     />
     <Tab.Screen
+      name="Chat AI"
+      component={GeminiChat}
+      options={{
+        tabBarIcon: ({ focused }) => (
+          <View className="items-center justify-center">
+            <Text
+              className={twMerge(
+                "text-sm",
+                focused ? "text-blue-500" : "text-gray-500"
+              )}
+            >
+              🤖
+            </Text>
+          </View>
+        ),
+      }}
+    />
+    <Tab.Screen
       name="Cá Nhân"
       component={ProfileScreen}
       options={{
@@ -123,6 +142,7 @@ const MainTabs = () => (
         ),
       }}
     />
+    
   </Tab.Navigator>
 );
 
@@ -149,6 +169,7 @@ export default function StackNavigator() {
             <Stack.Screen name="Question" component={QuestionScreen} />
             <Stack.Screen name="Congratulation" component={CongratulationScreen} />
             <Stack.Screen name="MainTabs" component={MainTabs} />
+            <Stack.Screen name="GeminiChatbot" component={GeminiChat} />
           </>
         )}
       </Stack.Navigator>

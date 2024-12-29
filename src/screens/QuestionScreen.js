@@ -20,7 +20,7 @@ const QuestionScreen = () => {
           Authorization: `Bearer ${token?.access_token}`,
         },
       });
-      console.log("🚀 ~ fetchingData ~ question:", question)
+      // console.log("🚀 ~ fetchingData ~ question:", question)
 
       setQuestions(question?.data);
     };

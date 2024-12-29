@@ -60,7 +60,7 @@ const HomeScreen = ({ initData }) => {
 
   return (
     <ScrollView className="flex-1 w-full p-6">
-      <View className="flex flex-row items-center justify-between gap-2 p-6 mb-5 -m-6 rounded-bl-xl rounded-br-xl bg-gradient-to-r from-blue-200 to-blue-400">
+      <View className="flex flex-row items-center justify-between gap-2 p-6 mb-5 -m-6  rounded-3xl bg-gradient-to-r bg-blue-300">
         <View className="flex flex-row items-center gap-2">
           <Image
             source={require("../../../assets/avatar.png")}
@@ -69,7 +69,7 @@ const HomeScreen = ({ initData }) => {
           />
 
           <View>
-            <Text className="font-medium">HELLO</Text>
+            <Text className="font-medium">Xin chào</Text>
             <Text className="text-xl font-bold">{user.fullname}</Text>
           </View>
         </View>

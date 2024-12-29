@@ -19,6 +19,23 @@ const Feedback = () => {
   };
 
   const handleSendFeedback = useCallback(async () => {
+    // Kiểm tra nếu rating hoặc feedbackText trống
+    if (rating === 0) {
+      Toast.show({
+        type: "error",
+        text1: "Vui lòng chọn đánh giá sao.",
+      });
+      return;
+    }
+
+    if (feedbackText.trim() === "") {
+      Toast.show({
+        type: "error",
+        text1: "Nội dung feedback không được để trống.",
+      });
+      return;
+    }
+
     try {
       await UseFetch("feedback/created", {
         method: "post",

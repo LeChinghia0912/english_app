@@ -21,6 +21,8 @@ const Register = () => {
   const [age, setAge] = useState("");
   const [level, setLevel] = useState("");
   const [phone, setPhone] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // Trạng thái ẩn/hiện mật khẩu
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false); // Trạng thái ẩn/hiện xác nhận mật khẩu
 
   const handleRegister = async () => {
     if (
@@ -141,25 +143,45 @@ const Register = () => {
         {/* Password Input */}
         <View className="mb-4">
           <Text className="mb-2 text-gray-700">Mật khẩu</Text>
-          <TextInput
-            className="p-3 bg-white border border-gray-300 rounded-lg"
-            placeholder="Nhập mật khẩu"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          <View className="relative">
+            <TextInput
+              className="p-3 bg-white border border-gray-300 rounded-lg pr-12"
+              placeholder="Nhập mật khẩu"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity
+              className="absolute right-3 top-3"
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Text className="text-blue-500">
+                {showPassword ? "Ẩn" : "Hiện"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Confirm Password Input */}
         <View className="mb-6">
           <Text className="mb-2 text-gray-700">Xác nhận mật khẩu</Text>
-          <TextInput
-            className="p-3 bg-white border border-gray-300 rounded-lg"
-            placeholder="Nhập lại mật khẩu"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-          />
+          <View className="relative">
+            <TextInput
+              className="p-3 bg-white border border-gray-300 rounded-lg pr-12"
+              placeholder="Nhập lại mật khẩu"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showConfirmPassword}
+            />
+            <TouchableOpacity
+              className="absolute right-3 top-3"
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            >
+              <Text className="text-blue-500">
+                {showConfirmPassword ? "Ẩn" : "Hiện"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Submit Button */}

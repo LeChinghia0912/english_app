@@ -7,7 +7,7 @@ const ViewResult = ({
   modalViewResult,
   answers = [],
   questions = [],
-}) => {
+}) => { 
   // Kiểm tra kết quả người dùng
   const renderUserResult = useMemo(() => {
     return answers.map((el, idx) => {
@@ -42,7 +42,6 @@ const ViewResult = ({
       );
     });
   }, [answers, questions]);
-
   // Kết quả chính xác của hệ thống
   const renderSystemResult = useMemo(() => {
     return questions.map((el, idx) => (
@@ -51,6 +50,14 @@ const ViewResult = ({
       </Text>
     ));
   }, [questions]);
+  
+  // const resetQuiz = () => {
+  //   // setAnswers([]); // Xóa tất cả câu trả lời
+  //   // setSelectedOptions([]); // Xóa các tùy chọn đã chọn
+  //   // setInputAnswer(""); // Xóa nội dung input
+  //   // setTranscript(""); // Xóa nội dung transcript
+  //   setCurrentQuestionIndex(0); // Quay lại câu hỏi đầu tiên
+  // };
 
   return (
     <Modal
@@ -59,13 +66,17 @@ const ViewResult = ({
       visible={modalViewResult}
       onRequestClose={() => setModalViewResult(false)}
     >
-      <View className="items-center justify-center flex-1">
+      <View className="items-center justify-center flex-1 bg-slate-200 bg-opacity-50">
         <View className="bg-white p-6 rounded-lg w-11/12 max-w-3xl">
           <Text className="mb-6 text-2xl font-bold text-center text-gray-800">
             Xem lại kết quả
           </Text>
 
-          <ScrollView className="space-y-4">
+          <ScrollView
+            className="space-y-4"
+            style={{ maxHeight: "70%" }}
+            keyboardShouldPersistTaps="handled"
+          >
             <View className="mb-6">
               <Text className="text-lg font-semibold text-gray-800 mb-3">
                 Đáp án chính xác
@@ -81,12 +92,28 @@ const ViewResult = ({
             </View>
           </ScrollView>
 
-          <TouchableOpacity
-            className="mt-4 px-6 py-3 bg-blue-500 rounded-lg"
-            onPress={() => setModalViewResult(false)}
-          >
-            <Text className="text-white text-lg text-center font-semibold">Đóng</Text>
-          </TouchableOpacity>
+          <View className="mt-4 flex-row justify-between">
+            {/* Button Đóng */}
+            <TouchableOpacity
+              className="px-6 py-3 bg-gray-500 rounded-lg flex-1 mr-2"
+              onPress={() => setModalViewResult(false)}
+            >
+              <Text className="text-white text-lg text-center font-semibold">Đóng</Text>
+            </TouchableOpacity>
+
+            {/* Button Làm lại
+            <TouchableOpacity
+              className="px-6 py-3 bg-blue-500 rounded-lg flex-1 ml-2"
+              onPress={() => {
+                onPress={resetQuiz}
+                setModalViewResult(false); 
+              }}
+            >
+              <Text className="text-white text-lg text-center font-semibold">
+                Làm lại
+              </Text>
+            </TouchableOpacity> */}
+          </View>
         </View>
       </View>
     </Modal>

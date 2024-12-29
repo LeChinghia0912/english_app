@@ -19,11 +19,11 @@ const SplashScreen = ({ navigation }) => {
   }, [isLoggedIn, navigation]);
 
   return (
-    <View className="flex-1 flex-center bg-gradient-to-t from-blue-700 to-blue-300">
+    <View className="flex-1 flex-center bg-gradient-to-t bg-blue-500 to-blue-300">
       {/* Logo hoặc hình ảnh */}
       <Image
-        source={require("../../assets/logo.png")} // Đường dẫn tới logo
-        className="flex-1 w-full h-full"
+        source={require("../../assets/wordbuddy.png")} // Đường dẫn tới logo
+        className="flex-1 w-80 h-full"
         resizeMode="contain"
       />
     </View>

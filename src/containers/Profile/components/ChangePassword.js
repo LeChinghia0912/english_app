@@ -14,14 +14,23 @@ const ChangePassword = ({ setModalChangePasswordVisible, modalChangePasswordVisi
 
   // Hàm xử lý đổi mật khẩu
   const handleChangePassword = async () => {
+    // Kiểm tra nếu các trường không được để trống
+    if (!password || !newPassword || !confirmPassword) {
+      Toast.show({
+        type: "error",
+        text1: "Tất cả các trường không được để trống!",
+      });
+      return;
+    }
+
+    // Kiểm tra nếu mật khẩu mới và xác nhận mật khẩu không khớp
     if (newPassword !== confirmPassword) {
       Toast.show({
         type: "error",
         text1: "Mật khẩu mới và xác nhận mật khẩu không khớp",
       });
-      
       return;
-    };
+    }
 
     try {
       await UseFetch("auth/change-password", {
@@ -47,7 +56,7 @@ const ChangePassword = ({ setModalChangePasswordVisible, modalChangePasswordVisi
     } catch (error) {
       Toast.show({
         type: "error",
-        text1: "Thao tác thất bại, vui lòng thư lại sau",
+        text1: "Thao tác thất bại, vui lòng thử lại sau",
       });
     }
   };

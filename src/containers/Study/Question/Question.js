@@ -4,7 +4,6 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
-
 import Toast from "react-native-toast-message";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigation } from "@react-navigation/native";
@@ -16,23 +15,28 @@ import {
   Alert,
   TextInput,
   Image,
+  ActivityIndicator,
 } from "react-native";
-
 import UseFetch from "../../../hooks/useFetch";
 import { useAuth } from "../../../contexts/AuthContext";
+import * as GoogleGenerativeAI from "@google/generative-ai";
 
 const Question = ({ param, initData }) => {
   const { token } = useAuth();
   const navigation = useNavigation();
   const questions = get(initData, ["0", "items"]);
 
-  const [answers, setAnswers] = useState([]); // Lưu trữ câu trả lời cuối cùng
+  const [answers, setAnswers] = useState([]);
   const [inputAnswer, setInputAnswer] = useState("");
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-
   const [recognizing, setRecognizing] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [relatedWords, setRelatedWords] = useState([]);
+  const [loadingVocabulary, setLoadingVocabulary] = useState(false);
+
+  const API_KEY = "AIzaSyB6Tt4J8Ube9vuZfUF3CPEkDIl4aK7zZ60";
+  const genAI = new GoogleGenerativeAI.GoogleGenerativeAI(API_KEY);
 
   const currentQuestion = questions && questions[currentQuestionIndex];
 
@@ -42,8 +46,26 @@ const Question = ({ param, initData }) => {
     setTranscript(event.results[0]?.transcript);
   });
   useSpeechRecognitionEvent("error", (event) => {
-    console.log("error code:", event.error, "error message:", event.message);
+    console.error("Speech recognition error:", event);
   });
+
+  const fetchRelatedVocabulary = useCallback(async () => {
+    if (!currentQuestion?.label) return;
+
+    setLoadingVocabulary(true);
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const prompt = `Analyze the topic of the question: "${currentQuestion.label}" and provide 5 related vocabulary words.`;
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const vocabulary = response.text().split(",");
+      setRelatedWords(vocabulary.map((word) => word.trim()));
+    } catch (error) {
+      console.error("Error fetching vocabulary:", error);
+    } finally {
+      setLoadingVocabulary(false);
+    }
+  }, [currentQuestion?.label]);
 
   const handleStart = async () => {
     const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
@@ -52,7 +74,6 @@ const Question = ({ param, initData }) => {
       setRecording(true);
       return;
     }
-    // Start speech recognition
     ExpoSpeechRecognitionModule.start({
       lang: "en-US",
       interimResults: true,
@@ -65,54 +86,33 @@ const Question = ({ param, initData }) => {
   };
 
   useEffect(() => {
-    const fetchingData = async () => {
-      if (answers.length === questions?.length) {
-        try {
-          await UseFetch(
-            `lesson/submit?chapter_id=${param?.chapter_id}&lesson_id=${param?.lesson_id}`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token?.access_token}`,
-              },
-              body: JSON.stringify(answers),
-            }
-          );
+    fetchRelatedVocabulary();
+  }, [fetchRelatedVocabulary]);
 
-          Toast.show({
-            type: "success",
-            text1: "Bạn đã hoàn thành bài kiểm tra!",
-          });
+  useEffect(() => {
+    if(typeof questions == "undefined") return;
+    console.log(questions.length)
 
-          navigation.push("Congratulation", { answers, questions, param });
-        } catch (error) {
-          Toast.show({
-            type: "error",
-            text1: "Lỗi kết nối, Vui lòng thử lại sau",
-          });
-        }
-      }
-    };
-
-    fetchingData();
-  }, [answers]); // Sẽ chạy khi answers thay đổi
+    if(currentQuestionIndex >= questions.length) {
+      console.log("Lọt vào đây")
+      submitAnswers();
+    }
+  }, [currentQuestionIndex, questions])
 
   const handleNext = () => {
     if (
-      (currentQuestion.layer === 1 || currentQuestion.layer === 3) &&
+      (currentQuestion?.layer === 1 || currentQuestion?.layer === 3) &&
       selectedOptions.length === 0
     ) {
       Alert.alert("Vui lòng chọn ít nhất một câu trả lời");
       return;
     }
 
-    if (currentQuestion.layer === 4 && !transcript) {
+    if (currentQuestion?.layer === 4 && !transcript) {
       Alert.alert("Vui lòng thu âm câu trả lời");
       return;
     }
 
-    // Kiểm tra nếu câu hỏi có layer là 3, lấy câu trả lời từ audio
     const currentAnswer = {
       question_id: currentQuestion?._id,
       results:
@@ -123,15 +123,33 @@ const Question = ({ param, initData }) => {
           : selectedOptions,
     };
 
-    // Cập nhật câu trả lời vào mảng answers
     setAnswers((prevAnswers) => [...prevAnswers, currentAnswer]);
 
-    if (currentQuestionIndex < questions.length - 1) {
-      // Chuyển sang câu hỏi tiếp theo
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setSelectedOptions([]); // Reset tùy chọn đã chọn
-      setInputAnswer(""); // Reset ô input nếu có
+    if (currentQuestionIndex < questions.length) {
+      setCurrentQuestionIndex((prev) => prev + 1);
+      setSelectedOptions([]);
+      setInputAnswer("");
       setTranscript("");
+    }
+  };
+
+  const submitAnswers = async () => {
+    try {
+      await UseFetch(
+        `lesson/submit?chapter_id=${param?.chapter_id}&lesson_id=${param?.lesson_id}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token?.access_token}`,
+          },
+          body: JSON.stringify(answers),
+        }
+      );
+      Toast.show({ type: "success", text1: "Bạn đã hoàn thành bài kiểm tra!" });
+      navigation.push("Congratulation", { answers, questions, param });
+    } catch (error) {
+      Toast.show({ type: "error", text1: "Lỗi kết nối, vui lòng thử lại sau" });
     }
   };
 
@@ -148,12 +166,14 @@ const Question = ({ param, initData }) => {
       setSelectedOptions([option]);
     }
 
-    // Phát âm thanh
-    Speech?.speak(option, {
-      language: "en",
-      pitch: 1.0,
-      rate: 1.0,
-    });
+    // Chỉ phát âm đáp án nếu không phải layer 3
+    if (currentQuestion?.layer !== 3) {
+      Speech?.speak(option, {
+        language: "en",
+        pitch: 1.0,
+        rate: 0.5,
+      });
+    }
   };
 
   const handleListen = useCallback(() => {
@@ -171,7 +191,6 @@ const Question = ({ param, initData }) => {
 
   const renderOptions = (options) => {
     if (typeof options == "undefined") return null;
-
     return options.map((option, index) => (
       <TouchableOpacity
         key={index}
@@ -192,22 +211,30 @@ const Question = ({ param, initData }) => {
   };
 
   return (
-    <ScrollView className="p-4 mt-10 bg-gray-100">
+    <ScrollView
+      className="p-4 mt-10 bg-gray-100"
+      contentContainerStyle={{
+        flexGrow: 1,
+        paddingBottom: 26,
+      }}
+    >
       <View className="mb-6">
-        <Text className="text-2xl font-bold text-gray-800">
+        <Text className="text-2xl font-semibold text-blue-400 text-center mb-6">
+          {param?.lesson_title || "Tiêu đề bài học chưa xác định"}
+        </Text>
+        <Text className="text-xl font-bold text-gray-800">
           Câu hỏi {currentQuestionIndex + 1}:
         </Text>
-        <Text className="mt-2 text-xl text-gray-800">
+        <Text className="mt-8 mb-8 text-2xl font-bold text-center text-gray-800">
           {currentQuestion?.label}
         </Text>
-
         <Image
-          className="mx-auto mt-6 mb-3 w-full h-36 bg-auto"
+          className="object-contain h-64 w-full"
           source={{ uri: currentQuestion?.poster }}
         />
       </View>
 
-      {/* Render các tùy chọn câu hỏi */}
+      {/* Hiển thị đáp án tùy theo layer */}
       {currentQuestion?.layer === 2 ? (
         <TextInput
           value={inputAnswer}
@@ -217,40 +244,135 @@ const Question = ({ param, initData }) => {
         />
       ) : currentQuestion?.layer === 3 ? (
         <View>
+          {/* Nút nghe đáp án */}
           <TouchableOpacity
             onPress={handleListen}
             className="py-3 px-3.5 rounded-sm border-[1px] border-stone-200 mb-4 shadow-sm w-fit mx-auto"
           >
-            <Text className="text-xl font-bold text-center">🔊</Text>
+            <Text className="text-xl font-bold text-center">🔊 Nghe</Text>
           </TouchableOpacity>
 
+          {/* Hiển thị danh sách lựa chọn */}
           {renderOptions(currentQuestion?.options)}
         </View>
       ) : currentQuestion?.layer === 4 ? (
-        <View className="flex items-center justify-center mt-4">
-          <Text className="mb-4 text-lg text-gray-800">
-            Hãy thu âm câu trả lời của bạn:
-          </Text>
-          <TouchableOpacity
-            onPress={
-              !recognizing
-                ? handleStart
-                : () => ExpoSpeechRecognitionModule.stop()
-            }
-            className="p-6 bg-blue-500 rounded-full"
+        <View>
+        <TouchableOpacity
+            onPress={handleListen}
+            className="py-3 px-3.5 rounded-sm border-[1px] border-stone-200 mb-4 shadow-sm w-fit mx-auto"
           >
-            <Text className="text-xl text-white">
+            <Text className="text-xl font-bold text-center">🔊 Nghe</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleStart}
+            className="px-6 py-3 mb-4 bg-green-500 rounded-lg"
+          >
+            <Text className="text-lg text-center text-white">
               {recognizing ? "Dừng thu âm" : "Bắt đầu thu âm"}
             </Text>
           </TouchableOpacity>
-
-          <Text>{transcript}</Text>
+          <Text className="mt-2 text-gray-800">
+            {transcript
+              ? `Câu trả lời của bạn: ${transcript}`
+              : "Chưa có ghi âm nào"}
+          </Text>
+          {/* Nút Reset */}
+          <TouchableOpacity
+            onPress={() => setTranscript("")} // Reset lại nội dung transcript
+            className="px-6 py-3 mt-4 bg-red-500 rounded-lg"
+          >
+            <Text className="text-lg text-center text-white">Làm lại</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         renderOptions(currentQuestion?.options)
       )}
 
-      {/* Nút Next */}
+      {loadingVocabulary ? (
+        <View style={{ alignItems: "center", marginVertical: 16 }}>
+          <ActivityIndicator size="large" color="#888888" />
+          <Text
+            style={{
+              color: "#888888",
+              fontSize: 16,
+              fontStyle: "italic",
+              marginTop: 8,
+            }}
+          >
+            Đang tải từ vựng...
+          </Text>
+        </View>
+      ) : relatedWords.length > 0 ? (
+        <View
+          style={{
+            marginTop: 16,
+            padding: 16,
+            backgroundColor: "#FFFFFF",
+            borderRadius: 12,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 2,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: "bold",
+              color: "#444444",
+              marginBottom: 12,
+            }}
+          >
+            Từ vựng liên quan:
+          </Text>
+          {relatedWords.map((word, index) => (
+            <View
+              key={index}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingVertical: 8,
+                borderBottomWidth: index < relatedWords.length - 1 ? 1 : 0,
+                borderBottomColor: "#E0E0E0",
+              }}
+            >
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  backgroundColor: "#ccd602",
+                  borderRadius: 4,
+                  marginRight: 12,
+                }}
+              />
+              <Text style={{ color: "#555555", fontSize: 16 }}>{word}</Text>
+            </View>
+          ))}
+          <TouchableOpacity
+            style={{
+              marginTop: 16,
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              backgroundColor: "#ccd602",
+              borderRadius: 8,
+              alignItems: "center",
+            }}
+            onPress={fetchRelatedVocabulary}
+          >
+            <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "600" }}>
+              Tìm kiếm thêm
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={{ alignItems: "center", marginVertical: 16 }}>
+          <Text style={{ color: "#888888", fontSize: 16, textAlign: "center" }}>
+            Không có từ vựng liên quan.
+          </Text>
+        </View>
+      )}
+
       <TouchableOpacity
         className="px-6 py-3 mt-6 bg-blue-500 rounded-lg"
         onPress={handleNext}

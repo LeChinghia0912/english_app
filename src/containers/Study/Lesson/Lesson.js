@@ -36,7 +36,8 @@ const Lesson = ({ chapter_slug, initData }) => {
                     chapter_slug,
                     lesson_slug: item.slug,
                     chapter_id: item.chapter_id,
-                    lesson_id: item._id
+                    lesson_id: item._id,
+                    lesson_title: item.title,
                   })
               : null
           }
