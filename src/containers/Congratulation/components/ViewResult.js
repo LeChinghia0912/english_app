@@ -7,7 +7,7 @@ const ViewResult = ({
   modalViewResult,
   answers = [],
   questions = [],
-}) => { 
+}) => {
   // Kiểm tra kết quả người dùng
   const renderUserResult = useMemo(() => {
     return answers.map((el, idx) => {
@@ -50,14 +50,6 @@ const ViewResult = ({
       </Text>
     ));
   }, [questions]);
-  
-  // const resetQuiz = () => {
-  //   // setAnswers([]); // Xóa tất cả câu trả lời
-  //   // setSelectedOptions([]); // Xóa các tùy chọn đã chọn
-  //   // setInputAnswer(""); // Xóa nội dung input
-  //   // setTranscript(""); // Xóa nội dung transcript
-  //   setCurrentQuestionIndex(0); // Quay lại câu hỏi đầu tiên
-  // };
 
   return (
     <Modal
@@ -67,15 +59,19 @@ const ViewResult = ({
       onRequestClose={() => setModalViewResult(false)}
     >
       <View className="items-center justify-center flex-1 bg-slate-200 bg-opacity-50">
-        <View className="bg-white p-6 rounded-lg w-11/12 max-w-3xl">
+        <View
+          className="bg-white p-6 rounded-lg w-11/12 max-w-3xl"
+          style={{ maxHeight: "80%" }}
+        >
           <Text className="mb-6 text-2xl font-bold text-center text-gray-800">
             Xem lại kết quả
           </Text>
 
           <ScrollView
             className="space-y-4"
-            style={{ maxHeight: "70%" }}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled={true}
+            contentContainerStyle={{ paddingBottom: 20 }}
           >
             <View className="mb-6">
               <Text className="text-lg font-semibold text-gray-800 mb-3">
@@ -100,19 +96,6 @@ const ViewResult = ({
             >
               <Text className="text-white text-lg text-center font-semibold">Đóng</Text>
             </TouchableOpacity>
-
-            {/* Button Làm lại
-            <TouchableOpacity
-              className="px-6 py-3 bg-blue-500 rounded-lg flex-1 ml-2"
-              onPress={() => {
-                onPress={resetQuiz}
-                setModalViewResult(false); 
-              }}
-            >
-              <Text className="text-white text-lg text-center font-semibold">
-                Làm lại
-              </Text>
-            </TouchableOpacity> */}
           </View>
         </View>
       </View>

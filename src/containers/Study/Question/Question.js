@@ -34,6 +34,8 @@ const Question = ({ param, initData }) => {
   const [transcript, setTranscript] = useState("");
   const [relatedWords, setRelatedWords] = useState([]);
   const [loadingVocabulary, setLoadingVocabulary] = useState(false);
+  const [speechRate, setSpeechRate] = useState(0.8);
+  const [accuracyPercentage, setAccuracyPercentage] = useState(0);
 
   const API_KEY = "AIzaSyB6Tt4J8Ube9vuZfUF3CPEkDIl4aK7zZ60";
   const genAI = new GoogleGenerativeAI.GoogleGenerativeAI(API_KEY);
@@ -54,8 +56,11 @@ const Question = ({ param, initData }) => {
 
     setLoadingVocabulary(true);
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-      const prompt = `Analyze the topic of the question: "${currentQuestion.label}" and provide 5 related vocabulary words.`;
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const prompt = `Vui lòng cung cấp danh sách 5 từ vựng tiếng Anh liên quan đến chủ đề 
+      "${currentQuestion.label}". Kèm theo mỗi từ là nghĩa dịch tiếng Việt. Hãy trình bày theo định dạng sau:
+          [Từ vựng tiếng Anh] -- [ Nghĩa tiếng Việt ] .
+          `;
       const result = await model.generateContent(prompt);
       const response = result.response;
       const vocabulary = response.text().split(",");
@@ -90,14 +95,66 @@ const Question = ({ param, initData }) => {
   }, [fetchRelatedVocabulary]);
 
   useEffect(() => {
-    if(typeof questions == "undefined") return;
-    console.log(questions.length)
+    if (typeof questions == "undefined") return;
+    console.log(questions.length);
 
-    if(currentQuestionIndex >= questions.length) {
-      console.log("Lọt vào đây")
+    if (currentQuestionIndex >= questions.length) {
+      console.log("Lọt vào đây");
       submitAnswers();
     }
-  }, [currentQuestionIndex, questions])
+  }, [currentQuestionIndex, questions]);
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchAccuracy = async () => {
+      // Kiểm tra nếu transcript hoặc currentQuestion không tồn tại
+      if (
+        !transcript ||
+        typeof currentQuestion?.label !== "string" ||
+        !currentQuestion.label.trim()
+      ) {
+        console.warn("Missing or invalid transcript or reference text.");
+        if (isMounted) setAccuracyPercentage(0); // Gán giá trị mặc định là 0%
+        return;
+      }
+
+      try {
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const prompt = `Tính toán độ tương đồng giữa 2 chuỗi sau:
+        Văn bản tham chiếu: "${currentQuestion.label.trim()}"
+        Văn bản của người dùng: "${transcript.trim()}". 
+        Hãy trả về chỉ số % tương đồng dưới dạng một số (không chứa ký tự khác).`;
+
+        const result = await model.generateContent(prompt);
+        const response = result.response?.text?.();
+
+        // Kiểm tra nếu response không hợp lệ
+        if (typeof response !== "string") {
+          console.warn("Invalid response format from AI model:", response);
+          if (isMounted) setAccuracyPercentage(0); // Giá trị mặc định là 0%
+          return;
+        }
+
+        // Parse response và validate
+        const accuracy = parseFloat(response);
+        if (isNaN(accuracy)) {
+          console.warn("Invalid response from AI model:", response);
+          if (isMounted) setAccuracyPercentage(0); // Giá trị mặc định là 0%
+        } else {
+          if (isMounted) setAccuracyPercentage(accuracy);
+        }
+      } catch (error) {
+        console.error("Error calculating accuracy:", error);
+        if (isMounted) setAccuracyPercentage(0); // Giá trị mặc định là 0%
+      }
+    };
+
+    fetchAccuracy();
+
+    return () => {
+      isMounted = false; // Prevent state updates after unmount
+    };
+  }, [transcript, currentQuestion?.label]);
 
   const handleNext = () => {
     if (
@@ -113,18 +170,52 @@ const Question = ({ param, initData }) => {
       return;
     }
 
+    // Đáp án của người dùng
+    const userAnswer =
+      currentQuestion?.layer === 4
+        ? [transcript]
+        : currentQuestion?.layer === 2
+        ? [inputAnswer]
+        : selectedOptions;
+
+    // Đáp án đúng từ dữ liệu câu hỏi
+    const correctAnswer = currentQuestion?.results;
+
+    // Kiểm tra đáp án
+    const isCorrect =
+      Array.isArray(correctAnswer) &&
+      Array.isArray(userAnswer) &&
+      correctAnswer.every((ans) => userAnswer.includes(ans)) &&
+      userAnswer.every((ans) => correctAnswer.includes(ans));
+
+    // Hiển thị thông báo
+    if (isCorrect) {
+      Toast.show({
+        type: "success",
+        text1: "🎉 Chính xác! 🎉",
+        text2: "Bạn làm tốt lắm! 💪🤩",
+        visibilityTime: 2000,
+        position: "top",
+      });
+    } else {
+      Toast.show({
+        type: "error",
+        text1: "😥 Oops! Sai mất rồi! 😥",
+        text2: "Cố lên nhé, bạn sẽ làm được! 🔥✊",
+        visibilityTime: 2000,
+        position: "top",
+      });
+    }
+
+    // Lưu đáp án của người dùng
     const currentAnswer = {
       question_id: currentQuestion?._id,
-      results:
-        currentQuestion?.layer === 4
-          ? [transcript]
-          : currentQuestion?.layer === 2
-          ? [inputAnswer]
-          : selectedOptions,
+      results: userAnswer,
     };
 
     setAnswers((prevAnswers) => [...prevAnswers, currentAnswer]);
 
+    // Chuyển sang câu hỏi tiếp theo
     if (currentQuestionIndex < questions.length) {
       setCurrentQuestionIndex((prev) => prev + 1);
       setSelectedOptions([]);
@@ -155,23 +246,20 @@ const Question = ({ param, initData }) => {
 
   const handleChoiceQuestion = (option) => {
     if (currentQuestion.mutiSelect) {
-      // Thêm hoặc xóa lựa chọn trong mảng
       setSelectedOptions((prevSelectedOptions) =>
         prevSelectedOptions.includes(option)
           ? prevSelectedOptions.filter((item) => item !== option)
           : [...prevSelectedOptions, option]
       );
     } else {
-      // Cập nhật lựa chọn đơn
       setSelectedOptions([option]);
     }
 
-    // Chỉ phát âm đáp án nếu không phải layer 3
     if (currentQuestion?.layer !== 3) {
       Speech?.speak(option, {
         language: "en",
         pitch: 1.0,
-        rate: 0.5,
+        rate: speechRate,
       });
     }
   };
@@ -181,13 +269,12 @@ const Question = ({ param, initData }) => {
 
     const result = currentQuestion.results?.join(" ");
 
-    // Phát âm thanh
     Speech?.speak(result, {
       language: "en",
       pitch: 1.0,
-      rate: 1.0,
+      rate: speechRate,
     });
-  }, [currentQuestion]);
+  }, [currentQuestion, speechRate]);
 
   const renderOptions = (options) => {
     if (typeof options == "undefined") return null;
@@ -219,6 +306,9 @@ const Question = ({ param, initData }) => {
       }}
     >
       <View className="mb-6">
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text className="text-xl font-bold">{`<`} Quay lại</Text>
+        </TouchableOpacity>
         <Text className="text-2xl font-semibold text-blue-400 text-center mb-6">
           {param?.lesson_title || "Tiêu đề bài học chưa xác định"}
         </Text>
@@ -234,6 +324,24 @@ const Question = ({ param, initData }) => {
         />
       </View>
 
+      {currentQuestion?.layer !== 2 && (
+        <View className="flex-row my-4">
+          <View className="flex-row my-4">
+            <TouchableOpacity
+              className={`mx-2 p-3 rounded-lg ${
+                speechRate === 2.5 ? "bg-green-500" : "bg-gray-300"
+              }`}
+              onPress={() => setSpeechRate(speechRate === 2.5 ? 0.8 : 2.5)}
+            >
+              <Text
+                style={{ color: speechRate === 2.5 ? "#FFFFFF" : "#000000" }}
+              >
+                Nhanh
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
       {/* Hiển thị đáp án tùy theo layer */}
       {currentQuestion?.layer === 2 ? (
         <TextInput
@@ -256,32 +364,59 @@ const Question = ({ param, initData }) => {
           {renderOptions(currentQuestion?.options)}
         </View>
       ) : currentQuestion?.layer === 4 ? (
-        <View>
-        <TouchableOpacity
+        <View style={{ padding: 16 }}>
+          {/* Nút nghe đáp án */}
+          <TouchableOpacity
             onPress={handleListen}
-            className="py-3 px-3.5 rounded-sm border-[1px] border-stone-200 mb-4 shadow-sm w-fit mx-auto"
+            className="py-3 px-4 rounded-lg border border-gray-300 mb-4 shadow-sm self-center"
           >
             <Text className="text-xl font-bold text-center">🔊 Nghe</Text>
           </TouchableOpacity>
+
+          {/* Nút bắt đầu hoặc dừng thu âm */}
           <TouchableOpacity
             onPress={handleStart}
-            className="px-6 py-3 mb-4 bg-green-500 rounded-lg"
+            className={`py-3 px-6 rounded-lg mb-4 self-center ${
+              recognizing ? "bg-red-500" : "bg-green-500"
+            }`}
           >
-            <Text className="text-lg text-center text-white">
-              {recognizing ? "Dừng thu âm" : "Bắt đầu thu âm"}
-            </Text>
+            <View>
+              <Text
+                className="text-xl font-bold text-white text-center"
+                // style={{ fontSize: 16, color: "#FFFFFF", textAlign: "center" }}
+              >
+                {recognizing ? "Dừng thu âm" : "Bắt đầu thu âm"}
+              </Text>
+            </View>
           </TouchableOpacity>
-          <Text className="mt-2 text-gray-800">
-            {transcript
-              ? `Câu trả lời của bạn: ${transcript}`
-              : "Chưa có ghi âm nào"}
-          </Text>
+
+          {/* Hiển thị câu trả lời */}
+          <View>
+            <Text className="text-2xl text-gray-600 mb-2 text-center">
+              {transcript
+                ? `Câu trả lời của bạn: ${transcript}`
+                : "Chưa có ghi âm nào"}
+            </Text>
+          </View>
+          {/* Hiển thị độ chính xác nếu có transcript */}
+          {transcript && (
+            <View>
+              <Text className="text-4xl text-gray-600 mb-4 text-center">
+                {`Độ chính xác: ${accuracyPercentage} %`}
+              </Text>
+            </View>
+          )}
+
           {/* Nút Reset */}
           <TouchableOpacity
-            onPress={() => setTranscript("")} // Reset lại nội dung transcript
-            className="px-6 py-3 mt-4 bg-red-500 rounded-lg"
+            onPress={() => setTranscript("")}
+            className="py-3 px-6 bg-red-500 rounded-lg self-center"
           >
-            <Text className="text-lg text-center text-white">Làm lại</Text>
+            <Text
+              style={{ fontSize: 16, color: "#FFFFFF", textAlign: "center" }}
+            >
+              Làm lại
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -346,7 +481,9 @@ const Question = ({ param, initData }) => {
                   marginRight: 12,
                 }}
               />
-              <Text style={{ color: "#555555", fontSize: 16 }}>{word}</Text>
+              <View>
+                <Text style={{ color: "#555555", fontSize: 16 }}>{word}</Text>
+              </View>
             </View>
           ))}
           <TouchableOpacity
