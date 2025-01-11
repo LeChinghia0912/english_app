@@ -22,7 +22,7 @@ const GeminiChatScreen = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [isRecording, setIsRecording] = useState(false);
-  const [isSpeakingEnabled, setIsSpeakingEnabled] = useState(true);
+  const [isSpeakingEnabled, setIsSpeakingEnabled] = useState(false);
 
   const API_KEY = "AIzaSyB6Tt4J8Ube9vuZfUF3CPEkDIl4aK7zZ60";
 
@@ -44,7 +44,7 @@ const GeminiChatScreen = () => {
       const prompt = "hello!";
       const result = await model.generateContent(prompt);
       const response = result.response;
-      const text = response.text();
+      const text = response.text().replace(/\*/g, "");
       setMessages((prevMessages) => [...prevMessages, { text, user: false }]);
     };
 
@@ -90,7 +90,7 @@ const GeminiChatScreen = () => {
       return;
     }
     ExpoSpeechRecognitionModule.start({
-      lang: "en-US",
+      lang: "vi-VN",
       interimResults: true,
       maxAlternatives: 1,
       continuous: false,
@@ -110,7 +110,7 @@ const GeminiChatScreen = () => {
     const prompt = userMessage.text;
     const result = await model.generateContent(prompt);
     const response = result.response;
-    const text = response.text();
+    const text = response.text().replace(/\*/g, "");
     const aiMessage = { text, user: false };
     setMessages([...messages, userMessage, aiMessage]);
     setLoading(false);

@@ -36,6 +36,7 @@ const Question = ({ param, initData }) => {
   const [loadingVocabulary, setLoadingVocabulary] = useState(false);
   const [speechRate, setSpeechRate] = useState(0.8);
   const [accuracyPercentage, setAccuracyPercentage] = useState(0);
+  const [showVocabulary, setShowVocabulary] = useState(false);
 
   const API_KEY = "AIzaSyB6Tt4J8Ube9vuZfUF3CPEkDIl4aK7zZ60";
   const genAI = new GoogleGenerativeAI.GoogleGenerativeAI(API_KEY);
@@ -63,7 +64,11 @@ const Question = ({ param, initData }) => {
           `;
       const result = await model.generateContent(prompt);
       const response = result.response;
-      const vocabulary = response.text().split(",");
+      const vocabulary = response
+        .text()
+        .replace(/\*/g, "") 
+        .split(",")
+        .map((word) => word.trim());
       setRelatedWords(vocabulary.map((word) => word.trim()));
     } catch (error) {
       console.error("Error fetching vocabulary:", error);
@@ -114,45 +119,69 @@ const Question = ({ param, initData }) => {
         !currentQuestion.label.trim()
       ) {
         console.warn("Missing or invalid transcript or reference text.");
-        if (isMounted) setAccuracyPercentage(0); // Gán giá trị mặc định là 0%
+        if (isMounted) setAccuracyPercentage(0);
         return;
       }
-
+    
+      // Hàm tính toán WER (Word Error Rate)
+      const calculateWER = (reference, hypothesis) => {
+        const refWords = reference.split(/\s+/); // Tách từ tham chiếu
+        const hypWords = hypothesis.split(/\s+/); // Tách từ của người dùng
+    
+        const refLen = refWords.length;
+        const hypLen = hypWords.length;
+    
+        // Tạo ma trận khoảng cách
+        const dp = Array.from({ length: refLen + 1 }, () =>
+          Array(hypLen + 1).fill(0)
+        );
+    
+        // Khởi tạo giá trị cho ma trận
+        for (let i = 0; i <= refLen; i++) dp[i][0] = i;
+        for (let j = 0; j <= hypLen; j++) dp[0][j] = j;
+    
+        // Điền ma trận khoảng cách
+        for (let i = 1; i <= refLen; i++) {
+          for (let j = 1; j <= hypLen; j++) {
+            if (refWords[i - 1] === hypWords[j - 1]) {
+              dp[i][j] = dp[i - 1][j - 1]; // Không có lỗi
+            } else {
+              dp[i][j] = Math.min(
+                dp[i - 1][j - 1] + 1, // Thay thế (substitution)
+                dp[i - 1][j] + 1,     // Xóa (deletion)
+                dp[i][j - 1] + 1      // Thêm (insertion)
+              );
+            }
+          }
+        }
+    
+        // Số lỗi chỉnh sửa tối thiểu
+        const errors = dp[refLen][hypLen];
+    
+        // Tính WER
+        return (errors / refLen) * 100;
+      };
+    
       try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const prompt = `Tính toán độ tương đồng giữa 2 chuỗi sau:
-        Văn bản tham chiếu: "${currentQuestion.label.trim()}"
-        Văn bản của người dùng: "${transcript.trim()}". 
-        Hãy trả về chỉ số % tương đồng dưới dạng một số (không chứa ký tự khác).`;
-
-        const result = await model.generateContent(prompt);
-        const response = result.response?.text?.();
-
-        // Kiểm tra nếu response không hợp lệ
-        if (typeof response !== "string") {
-          console.warn("Invalid response format from AI model:", response);
-          if (isMounted) setAccuracyPercentage(0); // Giá trị mặc định là 0%
-          return;
-        }
-
-        // Parse response và validate
-        const accuracy = parseFloat(response);
-        if (isNaN(accuracy)) {
-          console.warn("Invalid response from AI model:", response);
-          if (isMounted) setAccuracyPercentage(0); // Giá trị mặc định là 0%
-        } else {
-          if (isMounted) setAccuracyPercentage(accuracy);
-        }
+        const referenceText = currentQuestion.label.trim();
+        const userTranscript = transcript.trim();
+    
+        // Tính WER
+        const wer = calculateWER(referenceText, userTranscript);
+        const accuracy = Math.max(0, 100 - wer); // Độ chính xác = 100% - WER%
+    
+        // Cập nhật kết quả
+        if (isMounted) setAccuracyPercentage(accuracy);
       } catch (error) {
-        console.error("Error calculating accuracy:", error);
-        if (isMounted) setAccuracyPercentage(0); // Giá trị mặc định là 0%
+        console.error("Error calculating WER accuracy:", error);
+        if (isMounted) setAccuracyPercentage(0);
       }
     };
 
     fetchAccuracy();
 
     return () => {
-      isMounted = false; // Prevent state updates after unmount
+      isMounted = false;
     };
   }, [transcript, currentQuestion?.label]);
 
@@ -329,12 +358,12 @@ const Question = ({ param, initData }) => {
           <View className="flex-row my-4">
             <TouchableOpacity
               className={`mx-2 p-3 rounded-lg ${
-                speechRate === 2.5 ? "bg-green-500" : "bg-gray-300"
+                speechRate === 2.0 ? "bg-green-500" : "bg-gray-300"
               }`}
-              onPress={() => setSpeechRate(speechRate === 2.5 ? 0.8 : 2.5)}
+              onPress={() => setSpeechRate(speechRate === 2.0 ? 0.8 : 2.0)}
             >
               <Text
-                style={{ color: speechRate === 2.5 ? "#FFFFFF" : "#000000" }}
+                style={{ color: speechRate === 2.0 ? "#FFFFFFF" : "#000000" }}
               >
                 Nhanh
               </Text>
@@ -422,93 +451,177 @@ const Question = ({ param, initData }) => {
       ) : (
         renderOptions(currentQuestion?.options)
       )}
-
-      {loadingVocabulary ? (
-        <View style={{ alignItems: "center", marginVertical: 16 }}>
-          <ActivityIndicator size="large" color="#888888" />
-          <Text
-            style={{
-              color: "#888888",
-              fontSize: 16,
-              fontStyle: "italic",
-              marginTop: 8,
-            }}
-          >
-            Đang tải từ vựng...
-          </Text>
-        </View>
-      ) : relatedWords.length > 0 ? (
-        <View
-          style={{
-            marginTop: 16,
-            padding: 16,
-            backgroundColor: "#FFFFFF",
-            borderRadius: 12,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 2,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "bold",
-              color: "#444444",
-              marginBottom: 12,
-            }}
-          >
-            Từ vựng liên quan:
-          </Text>
-          {relatedWords.map((word, index) => (
-            <View
-              key={index}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 8,
-                borderBottomWidth: index < relatedWords.length - 1 ? 1 : 0,
-                borderBottomColor: "#E0E0E0",
-              }}
-            >
-              <View
-                style={{
-                  width: 8,
-                  height: 8,
-                  backgroundColor: "#ccd602",
-                  borderRadius: 4,
-                  marginRight: 12,
-                }}
-              />
-              <View>
-                <Text style={{ color: "#555555", fontSize: 16 }}>{word}</Text>
-              </View>
-            </View>
-          ))}
+      <View>
+        {!showVocabulary && (
           <TouchableOpacity
             style={{
               marginTop: 16,
               paddingVertical: 12,
               paddingHorizontal: 16,
-              backgroundColor: "#ccd602",
+              backgroundColor: "#4CAF50",
               borderRadius: 8,
               alignItems: "center",
             }}
-            onPress={fetchRelatedVocabulary}
+            onPress={() => {
+              setShowVocabulary(true);
+              fetchRelatedVocabulary();
+            }}
           >
             <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "600" }}>
-              Tìm kiếm thêm
+              Từ vựng liên quan
             </Text>
           </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={{ alignItems: "center", marginVertical: 16 }}>
-          <Text style={{ color: "#888888", fontSize: 16, textAlign: "center" }}>
-            Không có từ vựng liên quan.
-          </Text>
-        </View>
-      )}
+        )}
+
+        {showVocabulary && (
+          <>
+            {loadingVocabulary ? (
+              <View style={{ alignItems: "center", marginVertical: 16 }}>
+                <ActivityIndicator size="large" color="#888888" />
+                <Text
+                  style={{
+                    color: "#888888",
+                    fontSize: 16,
+                    fontStyle: "italic",
+                    marginTop: 8,
+                  }}
+                >
+                  Đang tải từ vựng...
+                </Text>
+              </View>
+            ) : relatedWords.length > 0 ? (
+              <View
+                style={{
+                  marginTop: 16,
+                  padding: 16,
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: 12,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 20,
+                    fontWeight: "bold",
+                    color: "#444444",
+                    marginBottom: 12,
+                  }}
+                >
+                  Từ vựng liên quan:
+                </Text>
+                {relatedWords.map((word, index) => (
+                  <View
+                    key={index}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: 8,
+                      borderBottomWidth:
+                        index < relatedWords.length - 1 ? 1 : 0,
+                      borderBottomColor: "#E0E0E0",
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        marginRight: 12,
+                      }}
+                    />
+                    <Text style={{ color: "#555555", fontSize: 16 }}>
+                      {word}
+                    </Text>
+                  </View>
+                ))}
+                <TouchableOpacity
+                  style={{
+                    marginTop: 16,
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    backgroundColor: "#4CAF50",
+                    borderRadius: 8,
+                    alignItems: "center",
+                  }}
+                  onPress={fetchRelatedVocabulary}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 16,
+                      fontWeight: "600",
+                    }}
+                  >
+                    Tìm kiếm thêm
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Nút Đóng */}
+                <TouchableOpacity
+                  style={{
+                    marginTop: 16,
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    backgroundColor: "#FF5252",
+                    borderRadius: 8,
+                    alignItems: "center",
+                  }}
+                  onPress={() => setShowVocabulary(false)}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 16,
+                      fontWeight: "600",
+                    }}
+                  >
+                    Đóng
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ alignItems: "center", marginVertical: 16 }}>
+                <Text
+                  style={{
+                    color: "#888888",
+                    fontSize: 16,
+                    textAlign: "center",
+                  }}
+                >
+                  Không có từ vựng liên quan.
+                </Text>
+
+                {/* Nút Đóng */}
+                <TouchableOpacity
+                  style={{
+                    marginTop: 16,
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    backgroundColor: "#FF5252",
+                    borderRadius: 8,
+                    alignItems: "center",
+                  }}
+                  onPress={() => setShowVocabulary(false)}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 16,
+                      fontWeight: "600",
+                    }}
+                  >
+                    Đóng
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
+        )}
+      </View>
 
       <TouchableOpacity
         className="px-6 py-3 mt-6 bg-blue-500 rounded-lg"
